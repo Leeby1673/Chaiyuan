@@ -22,7 +22,7 @@ TOOLS = genai_types.Tool(
     ]
 )
 
-MODEL = 'gemini-2.0-flash'
+MODEL = 'gemini-3.5-flash'
 FALLBACK_TEXT = '抱歉，我現在無法回覆，請稍後再試。'
 
 

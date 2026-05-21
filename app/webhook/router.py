@@ -1,7 +1,3 @@
-import hashlib
-import hmac
-import types
-
 from fastapi import APIRouter, HTTPException, Request
 from linebot.v3 import WebhookParser
 from linebot.v3.exceptions import InvalidSignatureError
@@ -15,19 +11,14 @@ from app.services import twse_service
 router = APIRouter()
 
 
-def _verify_signature(body: bytes, signature: str, secret: str) -> bool:
-    expected = hmac.new(secret.encode('utf-8'), body, hashlib.sha256).digest().hex()
-    return hmac.compare_digest(expected, signature)
-
-
 @router.post('/webhook')
 async def webhook(request: Request):
     settings = get_settings()
     body = await request.body()
     signature = request.headers.get('X-Line-Signature', '')
 
-    if not signature or not _verify_signature(body, signature, settings.line_channel_secret):
-        raise HTTPException(status_code=400, detail='Invalid signature')
+    if not signature:
+        raise HTTPException(status_code=400, detail='Missing signature')
 
     parser = WebhookParser(settings.line_channel_secret)
     try:

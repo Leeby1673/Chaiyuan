@@ -12,7 +12,7 @@ class TWSEServiceError(Exception):
 
 async def get_stock_data(stock_code: str) -> dict:
     settings = get_settings()
-    url = f'{settings.twse_base_url}/exchangeReport/STOCK_DAY?stockNo={stock_code}'
+    url = f'{settings.twse_base_url}/exchangeReport/STOCK_DAY_ALL'
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
@@ -25,7 +25,9 @@ async def get_stock_data(stock_code: str) -> dict:
         raise TWSEDataNotFoundError(f'No data found for stock code: {stock_code}')
 
     try:
-        row = rows[-1]
+        row = next((r for r in rows if r['Code'] == stock_code), None)
+        if row is None:
+            raise TWSEDataNotFoundError(f'No data found for stock code: {stock_code}')
         return {
             'stock_code': row['Code'],
             'name': row['Name'],

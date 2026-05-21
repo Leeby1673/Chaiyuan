@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -14,7 +15,9 @@ GEMINI_KEY = 'test-gemini-key'
 
 
 def _compute_signature(body: bytes, secret: str) -> str:
-    return hmac.new(secret.encode('utf-8'), body, hashlib.sha256).digest().hex()
+    return base64.b64encode(
+        hmac.new(secret.encode('utf-8'), body, hashlib.sha256).digest()
+    ).decode('utf-8')
 
 
 def _make_text_payload(text: str = 'hello') -> bytes:
@@ -82,8 +85,10 @@ def test_valid_signature_returns_200(client):
 
 
 def test_invalid_signature_returns_400(client):
+    from linebot.v3.exceptions import InvalidSignatureError
     body = _make_text_payload()
-    with patch('app.webhook.router.WebhookParser'):
+    with patch('app.webhook.router.WebhookParser') as MockParser:
+        MockParser.return_value.parse.side_effect = InvalidSignatureError()
         resp = client.post(
             '/webhook',
             content=body,
