@@ -3,6 +3,9 @@ from google import genai
 from google.genai import types as genai_types
 from app.config import get_settings
 
+# 這個檔案負責與 Gemini API 互動，將使用者的輸入傳給 Gemini，並解析 Gemini 的回應
+# Gemini 的回應可能是純文字，也可能包含 tool_call，表示它需要呼叫某個工具來取得資料
+# 「被告知」有哪些 tool 可以使用，以及 tool 的使用方式，是透過 TOOLS 這個變數定義的
 TOOLS = genai_types.Tool(
     function_declarations=[
         genai_types.FunctionDeclaration(

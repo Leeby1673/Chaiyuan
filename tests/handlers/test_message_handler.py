@@ -66,13 +66,15 @@ async def test_tool_call_triggers_twse_lookup():
 
 @pytest.mark.asyncio
 async def test_tool_result_sent_back_to_gemini_and_reply_sent():
-    response = GeminiResponse(text='', tool_call=ToolCall(name='get_stock_data', args={'stock_code': '2330'}))
-    line_api, gemini, twse = _make_deps(response)
+    tool_response = GeminiResponse(text='', tool_call=ToolCall(name='get_stock_data', args={'stock_code': '2330'}))
+    format_response = GeminiResponse(text='台積電今天收盤900元。')
+    line_api, gemini, twse = _make_deps(tool_response)
+    gemini.send = AsyncMock(side_effect=[tool_response, format_response])
     event = _make_text_event('2330 今天如何')
 
     await handle_event(event, line_api, gemini, twse)
 
-    gemini.send_tool_result.assert_called_once()
+    assert gemini.send.call_count == 2
     line_api.reply_message.assert_called_once()
     reply_text = _get_reply_text(line_api)
     assert '900' in reply_text or '台積電' in reply_text
@@ -152,3 +154,54 @@ async def test_unknown_function_call_replies_error():
     line_api.reply_message.assert_called_once()
     reply_text = _get_reply_text(line_api)
     assert len(reply_text) > 0
+
+
+# --- /股價 快速路徑 ---
+
+@pytest.mark.asyncio
+async def test_stock_prefix_skips_first_gemini_send_and_queries_twse():
+    line_api, gemini, twse = _make_deps(GeminiResponse(text='宏碁今日收盤18元。'))
+    event = _make_text_event('/股價 2330')
+
+    await handle_event(event, line_api, gemini, twse)
+
+    twse.get_stock_data.assert_called_once_with('2330')
+    gemini.send_tool_result.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stock_prefix_calls_gemini_send_for_formatting_and_replies():
+    line_api, gemini, twse = _make_deps(GeminiResponse(text='宏碁今日收盤18元。'))
+    event = _make_text_event('/股價 2330')
+
+    await handle_event(event, line_api, gemini, twse)
+
+    gemini.send.assert_called_once()
+    line_api.reply_message.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_stock_prefix_with_chinese_replies_hint():
+    line_api, gemini, twse = _make_deps(GeminiResponse(text=''))
+    event = _make_text_event('/股價 台積電')
+
+    await handle_event(event, line_api, gemini, twse)
+
+    gemini.send.assert_not_called()
+    twse.get_stock_data.assert_not_called()
+    reply_text = _get_reply_text(line_api)
+    assert '2330' in reply_text or '代碼' in reply_text
+
+
+@pytest.mark.asyncio
+async def test_stock_prefix_not_found_replies_error():
+    line_api, gemini, twse = _make_deps(
+        GeminiResponse(text=''), twse_error=TWSEDataNotFoundError('not found')
+    )
+    event = _make_text_event('/股價 9999')
+
+    await handle_event(event, line_api, gemini, twse)
+
+    line_api.reply_message.assert_called_once()
+    reply_text = _get_reply_text(line_api)
+    assert '查無' in reply_text or '找不到' in reply_text or '無資料' in reply_text
